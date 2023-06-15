@@ -1,6 +1,14 @@
+using Etickets_Platform.Data;
+using Etickets_Platform.Data.cart;
+using Etickets_Platform.Data.Services;
+using Etickets_Platform.Models;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.HttpsPolicy;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -23,7 +31,37 @@ namespace Etickets_Platform
         // This method gets called by the runtime. Use this method to add services to the container.
         public void ConfigureServices(IServiceCollection services)
         {
+            services.AddDbContext<AppDbContext>(options =>
+            {
+                options.UseSqlServer(Configuration.GetConnectionString("DefaultConnectString"));
+                options.EnableSensitiveDataLogging(true);
+            });
             services.AddControllersWithViews();
+
+            //services configuration 
+            services.AddScoped<IActorsService, ActorsService>();
+            services.AddScoped<IProducersService, ProducersService>();
+            services.AddScoped<ICinemasService, CinemasService>();
+            services.AddScoped<IMoviesService, MoviesService>();
+            services.AddScoped<IOrdersService, OrdersService>();
+
+
+            services.AddSingleton<IHttpContextAccessor, HttpContextAccessor>();
+
+            services.AddScoped(sc => ShoppingCart.GetShoppingCart(sc));
+
+
+            //authentication and authorization
+
+            services.AddIdentity<ApplicationUser, IdentityRole>().AddEntityFrameworkStores<AppDbContext>();
+            services.AddMemoryCache();
+            services.AddSession();
+            services.AddAuthentication(options =>
+            {
+                options.DefaultScheme = CookieAuthenticationDefaults.AuthenticationScheme;
+
+            });
+           
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
@@ -31,6 +69,8 @@ namespace Etickets_Platform
         {
             if (env.IsDevelopment())
             {
+
+                
                 app.UseDeveloperExceptionPage();
             }
             else
@@ -39,10 +79,17 @@ namespace Etickets_Platform
                 // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
                 app.UseHsts();
             }
-            app.UseHttpsRedirection();
+            app.UseDefaultFiles();
             app.UseStaticFiles();
+            app.UseHttpsRedirection();
+          
 
             app.UseRouting();
+            app.UseSession();
+
+            //Authentication and Authorization
+
+            app.UseAuthentication();
 
             app.UseAuthorization();
 
@@ -51,7 +98,11 @@ namespace Etickets_Platform
                 endpoints.MapControllerRoute(
                     name: "default",
                     pattern: "{controller=Home}/{action=Index}/{id?}");
+               
             });
+            //seed database
+            AppDbInitializer.Seed(app);
+            AppDbInitializer.SeedUsersAndRoleAsync(app).Wait();
         }
     }
 }
